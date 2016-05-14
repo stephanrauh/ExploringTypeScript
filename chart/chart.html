@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>TypeScript Coffee Wheel</title>
+    <link rel="stylesheet" type="text/css" href="chart.css">
+</head>
+
+<body>
+    <div style="width:800px;height:600px;border:1px solid red" id="test">
+
+    </div>
+    <div>
+        Update
+    </div>
+    <script src="d3.js"></script>
+    <script src="charting.js"></script>
+    <script>
+      var axis = new charting.chart('#test');
+      axis.draw();
+    </script>
+</body>
+
+</html>
