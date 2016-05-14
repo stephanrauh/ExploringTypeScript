@@ -1,2 +1,4 @@
-.meteor/local
-.meteor/meteorite
+*.map
+CoffeeWheel/wheel.js
+CoffeeWheel/wheel.map
+.DS_Store

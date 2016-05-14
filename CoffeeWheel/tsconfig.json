@@ -1,0 +1,22 @@
+{
+    "buildOnSave": true,
+    "compilerOptions": {
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "module": "commonjs",
+        "target": "es5",
+        "sourceMap": true,
+        "removeComments": false,
+        "noImplicitAny": true
+    },
+    "filesGlob": [
+        "*.ts"
+    ],
+    "files": [
+        "d3.d.ts",
+        "wheel.ts"
+    ],
+    "atom": {
+        "rewriteTsconfig": true
+    }
+}

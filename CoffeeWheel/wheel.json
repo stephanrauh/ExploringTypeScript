@@ -1,0 +1,19 @@
+[
+  {
+    "name": "CC Moderne Clients",
+    "children": [
+      {
+        "name": "Ziele",
+        "colour": "#ff0000"
+      },
+      {
+        "name": "Themen",
+        "colour": "#00ff00"
+      },
+      {
+        "name": "Produkte",
+        "colour": "#0000ff"
+      }
+    ]
+  }
+]
