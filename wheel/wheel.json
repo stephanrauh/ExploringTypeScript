@@ -3,16 +3,73 @@
     "name": "CC Moderne Clients",
     "children": [
       {
-        "name": "Ziele",
-        "colour": "#ff0000"
+        "name": "Ziele"
       },
       {
         "name": "Themen",
-        "colour": "#00ff00"
+        "children": [
+          {
+            "name": "Anwendungsmodernisierung"
+          },
+          {
+            "name": "Digitale Transformation"
+          },
+          {
+            "name": "neue Hardware, neue Bedienkonzepte"
+          },
+          {
+            "name": "UI-Frameworks",
+            "children": [
+              {
+                "name": "Angular2"
+              },
+              {
+                "name": "Ionic"
+              },
+              {
+                "name": "react.js"
+              },
+              {
+                "name": "Microsoft Universal Apps (UWP)"
+              },
+              {
+                "name": "MVC 1.0 aka Ozark vs. JSF"
+              },
+              {
+                "name": "JavaFX"
+              }
+            ]
+          },
+          {
+            "name": "Architektur",
+            "children": [
+              {
+                "name":"API Management"
+              },
+              {
+                "name": "Context-Aware Frontend Architecture"
+              },
+              {
+                "name": "OC Enterprise Appstore"
+              },
+              {
+                "name": "Microservices"
+              },
+              {
+                "name": "..."
+              }
+            ]
+          }
+        ]
       },
       {
-        "name": "Produkte",
-        "colour": "#0000ff"
+        "name": "Produkte"
+      },
+      {
+        "name": "Team"
+      },
+      {
+        "name": "Außenwirkung"
       }
     ]
   }
