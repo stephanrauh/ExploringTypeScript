@@ -14,7 +14,9 @@
     ],
     "files": [
         "d3.d.ts",
-        "wheel.ts"
+        "sunburst.ts",
+        "wheel.ts",
+        "wheelfez.ts"
     ],
     "atom": {
         "rewriteTsconfig": true

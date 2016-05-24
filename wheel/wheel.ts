@@ -10,173 +10,281 @@ interface Segment {
     angleInDegrees: number;
 }
 
-interface WheelNode extends d3.layout.tree.Node {
-  name: string;
-  color: string;
-  treeSize: number;
-  startAngle: number;
-  endAngle: number;
-  id: number;
-  innerRadius: number;
-  outerRadius: number;
-  angleInDegrees: number;
+interface WheelNode extends d3.layout.partition.Node {
+    name: string;
+    colour: string;
+    textColor: string;
+    treeSize: number;
+    startAngle: number;
+    endAngle: number;
+    id: number;
+    innerRadius: number;
+    outerRadius: number;
+    angleInDegrees: number;
 }
+
+interface D3Arc extends d3.svg.arc.Arc {
+    x: number;
+    y: number;
+    dx: number;
+    dy: number;
+}
+
+function isParentOf(p: d3.layout.partition.Node, c: d3.layout.partition.Node): boolean {
+    if (p === c) return true;
+    if (p.children) {
+        return p.children.some(function(d) {
+            return isParentOf(d, c);
+        });
+    }
+    return false;
+}
+
+function maxY(d: d3.layout.partition.Node): number {
+    return d.children ? Math.max.apply(Math, d.children.map(maxY)) : d.y + d.dy;
+}
+
 
 
 class Wheel {
-  _size: number;
-  _maxDepth = 0;
-  chart: d3.Selection<any>;
-
-  get size(): number { return this._size }
+    colors = new Colors();
 
     constructor() {
 
-      var w = document.getElementById("wheel").clientWidth;
-      this._size = document.getElementById("wheel").clientHeight;;
-      if (w < this._size) {
-        this._size=w;
-      }
-      this.chart = d3.select("#wheel").append("svg:svg")
-          .attr("class", "chart")
-          .attr("viewBox", "-100 -100 200 200")
-          .attr("width", this._size)
-          .attr("height", this._size)
-          .append("svg:g")
-          ;
-      this.readData();
     }
 
-    readData() {
-      var request = new XMLHttpRequest();
-      request.onload = () => {
-        if (request.readyState==4 && request.status==200)
-        {
-          var segments: Segment[] = JSON.parse(request.responseText);
-          this.showWheelFunctional(segments);
+    showWheelFunctional(json: Array<WheelNode>) {
+        var width = 840;
+        var height = width;
+        var radius = width / 2;
+        var x: d3.scale.Linear<number, number> = d3.scale.linear().range([0, 2 * Math.PI]);
+        var y: d3.scale.Pow<number, number> = d3.scale.pow().exponent(1.3).domain([0, 1]).range([0, radius]);
+        var padding = 5;
+        var duration = 1000;
+        d3.select("#wheel").select("img").remove();
+        var chart: d3.Selection<any> = d3.select("#wheel").append("svg")
+            .attr("width", width + padding * 2)
+            .attr("height", height + padding * 2)
+            .append("g")
+            .attr("transform", "translate(" + [radius + padding, radius + padding] + ")");
+
+        var partition = d3.layout.partition()
+            .sort(null)
+            .value(function(d) { return 5.8 - d.depth; });
+
+        var arc = d3.svg.arc()
+            .startAngle(function(d: D3Arc) {
+                return Math.max(0, Math.min(2 * Math.PI, x(d.x)));
+            })
+            .endAngle(function(d: D3Arc) {
+                return Math.max(0, Math.min(2 * Math.PI, x(d.x + d.dx)));
+            })
+            .innerRadius(function(d: D3Arc) {
+                return Math.max(0, d.y ? y(d.y) : d.y);
+            })
+            .outerRadius(function(d: D3Arc) {
+                return Math.max(0, y(d.y + d.dy));
+            });
+
+        var nodes = partition.nodes(json[0]);
+
+        for (var node of nodes) {
+            if (node.children == undefined) {
+                var d = <WheelNode>node;
+                d.colour = this.colors.getNextColor();
+                d.textColor = this.brightness(d3.rgb(d.colour)) < 125 ? "#eee" : "#000";
+            }
         }
-      };
-      request.open("get", "wheel.json", true);
-      request.send();
+
+        this.interpolateColors(nodes);
+
+        var path = chart.selectAll("path").data(nodes);
+        path.enter().append("path")
+            .attr("id", function(d, i) { return "path-" + i; })
+            .attr("d", arc)
+            .attr("fill-rule", "evenodd")
+            .style("fill", (d: WheelNode) => {
+                d.textColor = this.brightness(d3.rgb(d.colour)) < 125 ? "#eee" : "#000";
+                return d.colour;
+            })
+            .on("click", (d) => this.click(d, x, y, radius, arc, padding, path, text, duration));
+
+        var text = chart.selectAll("text").data(nodes);
+        var textEnter = text.enter().append("text")
+            .style("fill-opacity", 1)
+            .style("fill", function(d: WheelNode) {
+                return d.textColor;
+            })
+            .attr("text-anchor", function(d) {
+                return x(d.x + d.dx / 2) > Math.PI ? "end" : "start";
+            })
+            .attr("dy", ".2em")
+            .attr("transform", function(d: WheelNode) {
+                var multiline = (d.name || "").split(" ").length > 1,
+                    angle = x(d.x + d.dx / 2) * 180 / Math.PI - 90,
+                    rotate = angle + (multiline ? -.5 : 0);
+                return "rotate(" + rotate + ")translate(" + (y(d.y) + padding) + ")rotate(" + (angle > 90 ? -180 : 0) + ")";
+            })
+            .on("click", (d) => this.click(d, x, y, radius, arc, padding, path, text, duration));
+        textEnter.append("tspan")
+            .attr("x", 0)
+            .text(function(d: WheelNode) { return d.depth ? d.name.split(" ")[0] : ""; });
+        textEnter.append("tspan")
+            .attr("x", 0)
+            .attr("dy", "1em")
+            .text(function(d: WheelNode) { return d.depth ? d.name.split(" ")[1] || "" : ""; });
+
+
+
+
     }
 
-    showWheelFunctional(segments: Segment[]) {
-      var tree = d3.layout.tree()
-      	.size([this._size, this._size]);
-      var root = segments[0]
-      this.calculateTreeDepth(root)
-      this.calculateTreeSize(root)
-      this.calculateSegmentSize(root, 0, Math.PI * 2)
+    // *********************************************************************
 
-      var nodes = tree.nodes(root)
-      nodes.forEach(node => {
-        let w = <WheelNode>node;
-        w.innerRadius = w.depth == 0 ? 0 : (100 * w.depth) / (this._maxDepth+2);
-        w.outerRadius = 100 * (1+w.depth) / (this._maxDepth+2);
-        if (w.depth == this._maxDepth) {
-          w.outerRadius = 100;
+    click(d: d3.layout.partition.Node, x: d3.scale.Linear<number, number>,
+        y: d3.scale.Linear<number, number>, radius: number,
+        arc: any, padding: number,
+        path: d3.selection.Update<d3.layout.partition.Node>,
+        text: d3.selection.Update<d3.layout.partition.Node>, duration: number) {
+        path.transition()
+            .duration(duration)
+            .attrTween("d", this.arcTween(d, x, y, radius, arc));
+
+        // Somewhat of a hack as we rely on arcTween updating the scales.
+        text.style("visibility", function(e) {
+            return isParentOf(d, e) ? null : d3.select(this).style("visibility");
+        })
+            .transition()
+            .duration(duration)
+            .attrTween("text-anchor", function(d) {
+                return function() {
+                    return x(d.x + d.dx / 2) > Math.PI ? "end" : "start";
+                };
+            })
+            .attrTween("transform", function(d: WheelNode) {
+                var multiline = (d.name || "").split(" ").length > 1;
+                return function() {
+                    var angle = x(d.x + d.dx / 2) * 180 / Math.PI - 90,
+                        rotate = angle + (multiline ? -.5 : 0);
+                    return "rotate(" + rotate + ")translate(" + (y(d.y) + padding) + ")rotate(" + (angle > 90 ? -180 : 0) + ")";
+                };
+            })
+            .style("fill-opacity", function(e) { return isParentOf(d, e) ? 1 : 1e-6; })
+            .each("end", function(e) {
+                d3.select(this).style("visibility", isParentOf(d, e) ? null : "hidden");
+            });
+
+    }
+
+    // Interpolate the scales!
+    arcTween(d: d3.layout.partition.Node, x: d3.scale.Linear<number, number>,
+        y: d3.scale.Linear<number, number>, radius: number,
+        arc: any) {
+        var my = maxY(d);
+        var xd = d3.interpolate(x.domain(), [d.x, d.x + d.dx]);
+        var yd = d3.interpolate(y.domain(), [d.y, my]);
+        var yr = d3.interpolate(y.range(), [d.y ? 20 : 0, radius]);
+        return function(d: d3.layout.partition.Node) {
+            return function(t: number) { x.domain(xd(t)); y.domain(yd(t)).range(yr(t)); return arc(d); };
+        };
+    }
+
+
+    // *********************************************************************
+
+    brightness(rgb: d3.Rgb) {
+        return rgb.r * .299 + rgb.g * .587 + rgb.b * .114;
+    }
+
+    interpolateColors(nodes: Array<d3.layout.partition.Node>) {
+        for (var node of nodes) {
+            var d = <WheelNode>node;
+            if (d.children) {
+                this.interpolateColors(d.children);
+                // There is a maximum of two children!
+                var colors = d.children.map((child: WheelNode) => child.colour);
+                var a = d3.hsl(<string>(colors[0]));
+                var b = d3.hsl(<string>(colors[1]));
+                // L*a*b* might be better here...
+                d.colour = d3.hsl((a.h + b.h) / 2, a.s * 1.2, a.l / 1.2).toString();
+            }
         }
-        w.x=0;
-        w.y=0;
-      });
-      var node = this.chart.selectAll("g.node")
-        .data(nodes);
 
-
-      var nodeEnter = node.enter().append("svg:path")
-            .attr("fill", d => this.color(<WheelNode>d))
-            .attr("d", (d) => this.drawArc(d));
-
-      var textEnter = node.enter().append("text")
-          .attr("x", 0)
-          .attr("y", d => 0)
-      	  .attr("dy", ".15em")
-      	  .attr("text-anchor", "start")
-      	  .text(d => (<WheelNode>d).name)
-      	  .style("fill-opacity", 1)
-          .attr("transform", d => this.textPosition(<WheelNode>d))
-    }
-
-    textPosition(d: WheelNode) : string {
-      var radius = d.innerRadius + ((d.outerRadius-d.innerRadius) / 2) - 3
-      var dy = -(<WheelNode>d).name.length
-      var textRotation = 90;
-      if (d.depth == this._maxDepth) {
-        textRotation = 0
-        dy = 0
-        radius = d.innerRadius +5
-      }
-      if (d.depth == 0) {
-        textRotation = -90;
-        dy = 0
-        radius = 0
-        return "translate(-12)"
-      }
-
-      return "rotate(" +((<WheelNode>d).angleInDegrees) + ") translate(" + radius + ", " + dy +")"
-            + "rotate(" + textRotation +")";
-    }
-
-    drawArc (d: d3.layout.tree.Node): string {
-      var segment = <WheelNode>d;
-      var result = d3.svg.arc()
-          .innerRadius(a => { return segment.innerRadius; })
-          .outerRadius(a => { return segment.outerRadius;})
-          .startAngle(a => segment.startAngle)
-          .endAngle(a => segment.endAngle)
-          ;
-      return result();
-    }
-
-    color(d: WheelNode) {
-        return d3.hsl((d.startAngle+d.endAngle)*90*d.depth/Math.PI, 0.3 + d.depth / 5, 0.50).rgb().toString();
-    };
-
-    calculateTreeDepth(segment: Segment, level: number=0) {
-      if (segment.children) {
-        for (var child of segment.children) {
-          this.calculateTreeDepth(child, level+1)
-        }
-      }
-      else {
-        if (level > this._maxDepth) {
-          this._maxDepth = level;
-        }
-      }
-    }
-
-
-    calculateTreeSize(segment: Segment, level: number=0) {
-      segment.treeSize = 0;
-      if (segment.children) {
-        segment.children.forEach(segment => this.calculateTreeSize(segment, level+1))
-        for (var child of segment.children) {
-          segment.treeSize += child.treeSize
-        }
-      }
-      else {
-        segment.treeSize = (this._maxDepth-level+1);
-      }
-    }
-
-    calculateSegmentSize(segment: Segment, startAngle: number, endAngle: number) {
-      segment.startAngle = startAngle;
-      segment.endAngle = endAngle;
-      var center = segment.startAngle + ((segment.endAngle - segment.startAngle) / 2)
-      segment.angleInDegrees = (center * 180 / Math.PI)-90;
-      console.log(segment.angleInDegrees + " " + segment.name)
-    //  segment.angleInDegrees = (segment.startAngle) * 180 / Math.PI-90;
-      if (segment.children) {
-        var slice = (segment.endAngle - segment.startAngle) / segment.treeSize
-        var start = startAngle;
-        for (var child of segment.children) {
-          var end = start + child.treeSize * slice;
-          this.calculateSegmentSize(child, start, end)
-          start = end
-
-        }
-      }
     }
 }
 
-new Wheel();
+
+
+
+// ***********************************************************************
+
+class Colors {
+    getNextColor() {
+        return this.colorPalette[this.lastIndex++]
+    }
+
+    lastIndex = 0;
+
+    colorPalette = [
+        "#f9f0ab",
+        "#e8e596",
+        "#f0e2a3",
+        "#ede487",
+        "#efd580",
+        "#f1cb82",
+        "#f1c298",
+        "#e8b598",
+        "#d5dda1",
+        "#c9d2b5",
+        "#aec1ad",
+        "#a7b8a8",
+        "#b49a3d",
+        "#b28647",
+        "#a97d32",
+        "#b68334",
+        "#d6a680",
+        "#dfad70",
+        "#a2765d",
+        "#9f6652",
+        "#b9763f",
+        "#bf6e5d",
+        "#af643c",
+        "#9b4c3f",
+        "#72659d",
+        "#8a6e9e",
+        "#8f5c85",
+        "#934b8b",
+        "#9d4e87",
+        "#92538c",
+        "#8b6397",
+        "#716084",
+        "#2e6093",
+        "#3a5988",
+        "#4a5072",
+        "#393e64",
+        "#aaa1cc",
+        "#e0b5c9",
+        "#e098b0",
+        "#ee82a2",
+        "#ef91ac",
+        "#eda994",
+        "#eeb798",
+        "#ecc099",
+        "#f6d5aa",
+        "#f0d48a",
+        "#efd95f",
+        "#eee469",
+        "#dbdc7f",
+        "#dfd961",
+        "#ebe378",
+        "#f5e351"
+    ];
+}
+
+
+// ***********************************************************************
+
+d3.json("wheel.json", (error: any, json: Array<WheelNode>) => {
+    var w = new Wheel();
+    w.showWheelFunctional(json);
+});

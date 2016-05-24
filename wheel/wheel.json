@@ -9,13 +9,16 @@
         "name": "Themen",
         "children": [
           {
-            "name": "Anwendungsmodernisierung"
+            "name": "Anwendungs- modernisierung"
           },
           {
             "name": "Digitale Transformation"
           },
           {
-            "name": "neue Hardware, neue Bedienkonzepte"
+            "name": "neue Hardware"
+          },
+          {
+            "name": "neue Bedienkonzepte"
           },
           {
             "name": "UI-Frameworks",
@@ -30,7 +33,7 @@
                 "name": "react.js"
               },
               {
-                "name": "Microsoft Universal Apps (UWP)"
+                "name": "Microsoft Universal-Apps"
               },
               {
                 "name": "MVC 1.0 aka Ozark vs. JSF"
@@ -47,10 +50,10 @@
                 "name":"API Management"
               },
               {
-                "name": "Context-Aware Frontend Architecture"
+                "name": "Context-Aware Frontend-Architecture"
               },
               {
-                "name": "OC Enterprise Appstore"
+                "name": "Enterprise Appstore"
               },
               {
                 "name": "Microservices"

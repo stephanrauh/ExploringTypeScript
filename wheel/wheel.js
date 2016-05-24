@@ -1,150 +1,221 @@
 /// <reference path="./d3.d.ts"/>;
+function isParentOf(p, c) {
+    if (p === c)
+        return true;
+    if (p.children) {
+        return p.children.some(function (d) {
+            return isParentOf(d, c);
+        });
+    }
+    return false;
+}
+function maxY(d) {
+    return d.children ? Math.max.apply(Math, d.children.map(maxY)) : d.y + d.dy;
+}
 var Wheel = (function () {
     function Wheel() {
-        this._maxDepth = 0;
-        var w = document.getElementById("wheel").clientWidth;
-        this._size = document.getElementById("wheel").clientHeight;
-        ;
-        if (w < this._size) {
-            this._size = w;
-        }
-        this.chart = d3.select("#wheel").append("svg:svg")
-            .attr("class", "chart")
-            .attr("viewBox", "-100 -100 200 200")
-            .attr("width", this._size)
-            .attr("height", this._size)
-            .append("svg:g");
-        this.readData();
+        this.colors = new Colors();
     }
-    Object.defineProperty(Wheel.prototype, "size", {
-        get: function () { return this._size; },
-        enumerable: true,
-        configurable: true
-    });
-    Wheel.prototype.readData = function () {
+    Wheel.prototype.showWheelFunctional = function (json) {
         var _this = this;
-        var request = new XMLHttpRequest();
-        request.onload = function () {
-            if (request.readyState == 4 && request.status == 200) {
-                var segments = JSON.parse(request.responseText);
-                _this.showWheelFunctional(segments);
-            }
-        };
-        request.open("get", "wheel.json", true);
-        request.send();
-    };
-    Wheel.prototype.showWheelFunctional = function (segments) {
-        var _this = this;
-        var tree = d3.layout.tree()
-            .size([this._size, this._size]);
-        var root = segments[0];
-        this.calculateTreeDepth(root);
-        this.calculateTreeSize(root);
-        this.calculateSegmentSize(root, 0, Math.PI * 2);
-        var nodes = tree.nodes(root);
-        nodes.forEach(function (node) {
-            var w = node;
-            w.innerRadius = w.depth == 0 ? 0 : (100 * w.depth) / (_this._maxDepth + 2);
-            w.outerRadius = 100 * (1 + w.depth) / (_this._maxDepth + 2);
-            if (w.depth == _this._maxDepth) {
-                w.outerRadius = 100;
-            }
-            w.x = 0;
-            w.y = 0;
+        var width = 840;
+        var height = width;
+        var radius = width / 2;
+        var x = d3.scale.linear().range([0, 2 * Math.PI]);
+        var y = d3.scale.pow().exponent(1.3).domain([0, 1]).range([0, radius]);
+        var padding = 5;
+        var duration = 1000;
+        d3.select("#wheel").select("img").remove();
+        var chart = d3.select("#wheel").append("svg")
+            .attr("width", width + padding * 2)
+            .attr("height", height + padding * 2)
+            .append("g")
+            .attr("transform", "translate(" + [radius + padding, radius + padding] + ")");
+        var partition = d3.layout.partition()
+            .sort(null)
+            .value(function (d) { return 5.8 - d.depth; });
+        var arc = d3.svg.arc()
+            .startAngle(function (d) {
+            return Math.max(0, Math.min(2 * Math.PI, x(d.x)));
+        })
+            .endAngle(function (d) {
+            return Math.max(0, Math.min(2 * Math.PI, x(d.x + d.dx)));
+        })
+            .innerRadius(function (d) {
+            return Math.max(0, d.y ? y(d.y) : d.y);
+        })
+            .outerRadius(function (d) {
+            return Math.max(0, y(d.y + d.dy));
         });
-        var node = this.chart.selectAll("g.node")
-            .data(nodes);
-        var nodeEnter = node.enter().append("svg:path")
-            .attr("fill", function (d) { return _this.color(d); })
-            .attr("d", function (d) { return _this.drawArc(d); });
-        var textEnter = node.enter().append("text")
-            .attr("x", 0)
-            .attr("y", function (d) { return 0; })
-            .attr("dy", ".15em")
-            .attr("text-anchor", "start")
-            .text(function (d) { return d.name; })
+        var nodes = partition.nodes(json[0]);
+        for (var _i = 0, nodes_1 = nodes; _i < nodes_1.length; _i++) {
+            var node = nodes_1[_i];
+            if (node.children == undefined) {
+                var d = node;
+                d.colour = this.colors.getNextColor();
+                d.textColor = this.brightness(d3.rgb(d.colour)) < 125 ? "#eee" : "#000";
+            }
+        }
+        this.interpolateColors(nodes);
+        var path = chart.selectAll("path").data(nodes);
+        path.enter().append("path")
+            .attr("id", function (d, i) { return "path-" + i; })
+            .attr("d", arc)
+            .attr("fill-rule", "evenodd")
+            .style("fill", function (d) {
+            d.textColor = _this.brightness(d3.rgb(d.colour)) < 125 ? "#eee" : "#000";
+            return d.colour;
+        })
+            .on("click", function (d) { return _this.click(d, x, y, radius, arc, padding, path, text, duration); });
+        var text = chart.selectAll("text").data(nodes);
+        var textEnter = text.enter().append("text")
             .style("fill-opacity", 1)
-            .attr("transform", function (d) { return _this.textPosition(d); });
+            .style("fill", function (d) {
+            return d.textColor;
+        })
+            .attr("text-anchor", function (d) {
+            return x(d.x + d.dx / 2) > Math.PI ? "end" : "start";
+        })
+            .attr("dy", ".2em")
+            .attr("transform", function (d) {
+            var multiline = (d.name || "").split(" ").length > 1, angle = x(d.x + d.dx / 2) * 180 / Math.PI - 90, rotate = angle + (multiline ? -.5 : 0);
+            return "rotate(" + rotate + ")translate(" + (y(d.y) + padding) + ")rotate(" + (angle > 90 ? -180 : 0) + ")";
+        })
+            .on("click", function (d) { return _this.click(d, x, y, radius, arc, padding, path, text, duration); });
+        textEnter.append("tspan")
+            .attr("x", 0)
+            .text(function (d) { return d.depth ? d.name.split(" ")[0] : ""; });
+        textEnter.append("tspan")
+            .attr("x", 0)
+            .attr("dy", "1em")
+            .text(function (d) { return d.depth ? d.name.split(" ")[1] || "" : ""; });
     };
-    Wheel.prototype.textPosition = function (d) {
-        var radius = d.innerRadius + ((d.outerRadius - d.innerRadius) / 2) - 3;
-        var dy = -d.name.length;
-        var textRotation = 90;
-        if (d.depth == this._maxDepth) {
-            textRotation = 0;
-            dy = 0;
-            radius = d.innerRadius + 5;
-        }
-        if (d.depth == 0) {
-            textRotation = -90;
-            dy = 0;
-            radius = 0;
-            return "translate(-12)";
-        }
-        return "rotate(" + (d.angleInDegrees) + ") translate(" + radius + ", " + dy + ")"
-            + "rotate(" + textRotation + ")";
+    // *********************************************************************
+    Wheel.prototype.click = function (d, x, y, radius, arc, padding, path, text, duration) {
+        path.transition()
+            .duration(duration)
+            .attrTween("d", this.arcTween(d, x, y, radius, arc));
+        // Somewhat of a hack as we rely on arcTween updating the scales.
+        text.style("visibility", function (e) {
+            return isParentOf(d, e) ? null : d3.select(this).style("visibility");
+        })
+            .transition()
+            .duration(duration)
+            .attrTween("text-anchor", function (d) {
+            return function () {
+                return x(d.x + d.dx / 2) > Math.PI ? "end" : "start";
+            };
+        })
+            .attrTween("transform", function (d) {
+            var multiline = (d.name || "").split(" ").length > 1;
+            return function () {
+                var angle = x(d.x + d.dx / 2) * 180 / Math.PI - 90, rotate = angle + (multiline ? -.5 : 0);
+                return "rotate(" + rotate + ")translate(" + (y(d.y) + padding) + ")rotate(" + (angle > 90 ? -180 : 0) + ")";
+            };
+        })
+            .style("fill-opacity", function (e) { return isParentOf(d, e) ? 1 : 1e-6; })
+            .each("end", function (e) {
+            d3.select(this).style("visibility", isParentOf(d, e) ? null : "hidden");
+        });
     };
-    Wheel.prototype.drawArc = function (d) {
-        var segment = d;
-        var result = d3.svg.arc()
-            .innerRadius(function (a) { return segment.innerRadius; })
-            .outerRadius(function (a) { return segment.outerRadius; })
-            .startAngle(function (a) { return segment.startAngle; })
-            .endAngle(function (a) { return segment.endAngle; });
-        return result();
+    // Interpolate the scales!
+    Wheel.prototype.arcTween = function (d, x, y, radius, arc) {
+        var my = maxY(d);
+        var xd = d3.interpolate(x.domain(), [d.x, d.x + d.dx]);
+        var yd = d3.interpolate(y.domain(), [d.y, my]);
+        var yr = d3.interpolate(y.range(), [d.y ? 20 : 0, radius]);
+        return function (d) {
+            return function (t) { x.domain(xd(t)); y.domain(yd(t)).range(yr(t)); return arc(d); };
+        };
     };
-    Wheel.prototype.color = function (d) {
-        return d3.hsl((d.startAngle + d.endAngle) * 90 * d.depth / Math.PI, 0.3 + d.depth / 5, 0.50).rgb().toString();
+    // *********************************************************************
+    Wheel.prototype.brightness = function (rgb) {
+        return rgb.r * .299 + rgb.g * .587 + rgb.b * .114;
     };
-    ;
-    Wheel.prototype.calculateTreeDepth = function (segment, level) {
-        if (level === void 0) { level = 0; }
-        if (segment.children) {
-            for (var _i = 0, _a = segment.children; _i < _a.length; _i++) {
-                var child = _a[_i];
-                this.calculateTreeDepth(child, level + 1);
-            }
-        }
-        else {
-            if (level > this._maxDepth) {
-                this._maxDepth = level;
-            }
-        }
-    };
-    Wheel.prototype.calculateTreeSize = function (segment, level) {
-        var _this = this;
-        if (level === void 0) { level = 0; }
-        segment.treeSize = 0;
-        if (segment.children) {
-            segment.children.forEach(function (segment) { return _this.calculateTreeSize(segment, level + 1); });
-            for (var _i = 0, _a = segment.children; _i < _a.length; _i++) {
-                var child = _a[_i];
-                segment.treeSize += child.treeSize;
-            }
-        }
-        else {
-            segment.treeSize = (this._maxDepth - level + 1);
-        }
-    };
-    Wheel.prototype.calculateSegmentSize = function (segment, startAngle, endAngle) {
-        segment.startAngle = startAngle;
-        segment.endAngle = endAngle;
-        var center = segment.startAngle + ((segment.endAngle - segment.startAngle) / 2);
-        segment.angleInDegrees = (center * 180 / Math.PI) - 90;
-        console.log(segment.angleInDegrees + " " + segment.name);
-        //  segment.angleInDegrees = (segment.startAngle) * 180 / Math.PI-90;
-        if (segment.children) {
-            var slice = (segment.endAngle - segment.startAngle) / segment.treeSize;
-            var start = startAngle;
-            for (var _i = 0, _a = segment.children; _i < _a.length; _i++) {
-                var child = _a[_i];
-                var end = start + child.treeSize * slice;
-                this.calculateSegmentSize(child, start, end);
-                start = end;
+    Wheel.prototype.interpolateColors = function (nodes) {
+        for (var _i = 0, nodes_2 = nodes; _i < nodes_2.length; _i++) {
+            var node = nodes_2[_i];
+            var d = node;
+            if (d.children) {
+                this.interpolateColors(d.children);
+                // There is a maximum of two children!
+                var colors = d.children.map(function (child) { return child.colour; });
+                var a = d3.hsl((colors[0]));
+                var b = d3.hsl((colors[1]));
+                // L*a*b* might be better here...
+                d.colour = d3.hsl((a.h + b.h) / 2, a.s * 1.2, a.l / 1.2).toString();
             }
         }
     };
     return Wheel;
 }());
-new Wheel();
+// ***********************************************************************
+var Colors = (function () {
+    function Colors() {
+        this.lastIndex = 0;
+        this.colorPalette = [
+            "#f9f0ab",
+            "#e8e596",
+            "#f0e2a3",
+            "#ede487",
+            "#efd580",
+            "#f1cb82",
+            "#f1c298",
+            "#e8b598",
+            "#d5dda1",
+            "#c9d2b5",
+            "#aec1ad",
+            "#a7b8a8",
+            "#b49a3d",
+            "#b28647",
+            "#a97d32",
+            "#b68334",
+            "#d6a680",
+            "#dfad70",
+            "#a2765d",
+            "#9f6652",
+            "#b9763f",
+            "#bf6e5d",
+            "#af643c",
+            "#9b4c3f",
+            "#72659d",
+            "#8a6e9e",
+            "#8f5c85",
+            "#934b8b",
+            "#9d4e87",
+            "#92538c",
+            "#8b6397",
+            "#716084",
+            "#2e6093",
+            "#3a5988",
+            "#4a5072",
+            "#393e64",
+            "#aaa1cc",
+            "#e0b5c9",
+            "#e098b0",
+            "#ee82a2",
+            "#ef91ac",
+            "#eda994",
+            "#eeb798",
+            "#ecc099",
+            "#f6d5aa",
+            "#f0d48a",
+            "#efd95f",
+            "#eee469",
+            "#dbdc7f",
+            "#dfd961",
+            "#ebe378",
+            "#f5e351"
+        ];
+    }
+    Colors.prototype.getNextColor = function () {
+        return this.colorPalette[this.lastIndex++];
+    };
+    return Colors;
+}());
+// ***********************************************************************
+d3.json("wheel.json", function (error, json) {
+    var w = new Wheel();
+    w.showWheelFunctional(json);
+});
 //# sourceMappingURL=wheel.js.map
